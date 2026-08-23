@@ -70,4 +70,4 @@ async def reset_error(ctx, error):
 
 # Wklej swój skopiowany Token pomiędzy cudzysłowy poniżej:
 import os
-bot.run(os.environ.get("MTU0MTE0NjQzNzMxOTEzMTI3Ng.G5OS76.FCUaaEuVpAgw0gGUf-VZ9zbf2GYa2Hjc9tfcVw"))
+bot.run(os.environ.get("DISCORD_TOKEN"))
