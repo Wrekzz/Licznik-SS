@@ -69,4 +69,4 @@ async def reset_error(ctx, error):
         await ctx.send("❌ Nie masz uprawnień (Administratora), aby zresetować ten ranking!")
 
 # Wklej swój skopiowany Token pomiędzy cudzysłowy poniżej:
-bot.run("MTU0MTE0NjQzNzMxOTEzMTI3Ng.G4mcmp.qNTR6d13zlE5vFmoxVzWYHU8JSD7BNKS9Uc574")
+bot.run("MTU0MTE0NjQzNzMxOTEzMTI3Ng.GrWUgu.9E7-dkyAnKO8jY6hShPIjbgNP8KB7FAkjhhAfM")
