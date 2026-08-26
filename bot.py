@@ -10,7 +10,7 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 KANAL_1_ID = 1530941134816153660
 KANAL_2_ID = 1541126147830448168 
 
-# 📺 TUTAJ WPISZ ID SPECJALNEGO KANAŁU, NA KTÓRYM BOT MA POKAZYWAĆ TABELE:
+# 📺 ID SPECJALNEGO KANAŁU, NA KTÓRYM BOT MA POKAZYWAĆ TABELE:
 KANAL_RANKINGU_ID = 1541150631623000144
 
 PLIK_BAZY = "rankingi.json"
@@ -27,7 +27,6 @@ STARE_PUNKTY_KANAL_2 = {
     "393812412752461824": 8
 }
 
-# Słownik przechowujący ID wiadomości z tabelami (1 = Pierwsza tabela, 2 = Druga tabela)
 ranking_messages = {
     1: None,
     2: None
@@ -56,11 +55,11 @@ def zapisz_dane(r1, r2):
     with open(PLIK_BAZY, "w", encoding="utf-8") as f:
         json.dump(dane, f, indent=4, ensure_ascii=False)
 
-# Inicjalizacja bazy danych na starcie
 ranking_kanal_1, ranking_kanal_2 = zaladuj_dane()
 
 def generuj_ranking_embed(ranking_dict, numer_kanalu):
     """Tworzy estetyczną ramkę (Embed) z posortowanymi wynikami"""
+    # Poprawione sortowanie po wartości (punktach), a nie po kluczu
     posortowany = sorted(ranking_dict.items(), key=lambda item: item[1], reverse=True)
     
     embed = discord.Embed(
@@ -81,7 +80,6 @@ def generuj_ranking_embed(ranking_dict, numer_kanalu):
 
 async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
     """Wysyła nową tabelę lub edytuje już istniejącą na dedykowanym kanale"""
-    # Używamy fetch_channel jeśli get_channel zawiedzie przy starcie bota
     kanal = bot.get_channel(KANAL_RANKINGU_ID)
     if not kanal:
         try:
@@ -92,7 +90,6 @@ async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
 
     embed = generuj_ranking_embed(ranking_dict, numer_kanalu)
 
-    # 1. Próba edycji na podstawie pamięci podręcznej bota
     if ranking_messages[numer_kanalu]:
         try:
             msg = await kanal.fetch_message(ranking_messages[numer_kanalu])
@@ -101,7 +98,7 @@ async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
         except discord.NotFound:
             ranking_messages[numer_kanalu] = None
 
-    # 2. Próba znalezienia starej tabeli w historii (zapobiega duplikatom po restarcie)
+    # NAPRAWIONO: message.embeds[0].title zamiast message.embeds.title
     try:
         async for message in kanal.history(limit=50):
             if message.author == bot.user and message.embeds:
@@ -112,7 +109,6 @@ async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
     except Exception as e:
         print(f"⚠️ Nie udało się przeszukać historii kanału: {e}")
 
-    # 3. Jeśli nie znaleziono żadnej wiadomości bota, wyślij nową
     nowa_wiadomosc = await kanal.send(embed=embed)
     ranking_messages[numer_kanalu] = nowa_wiadomosc.id
 
@@ -120,19 +116,17 @@ async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
 async def on_ready():
     print(f"Zalogowano jako {bot.user}")
     print("Oczekiwanie 3 sekundy na pełne załadowanie kanałów...")
-    await asyncio.sleep(3)  # Dajemy botu czas na połączenie się z serwerami Discorda
+    await asyncio.sleep(3)
     
-    # Wyświetlenie tabel natychmiast po uruchomieniu bota
     await aktualizuj_ranking_na_kanale(ranking_kanal_1, 1)
     await aktualizuj_ranking_na_kanale(ranking_kanal_2, 2)
-    print("✅ Tabele rankingowe zostały zainicjalizowane.")
+    print("✅ Tabele rankingowe zostały pomyślnie wysłane/zaktualizowane.")
 
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    # KANAŁ 1 (Nasłuchiwanie zdjęć i aktualizacja na kanale dedykowanym)
     if message.channel.id == KANAL_1_ID and message.attachments:
         dodano_foto = False
         for zalacznik in message.attachments:
@@ -144,7 +138,6 @@ async def on_message(message):
             zapisz_dane(ranking_kanal_1, ranking_kanal_2)
             await aktualizuj_ranking_na_kanale(ranking_kanal_1, 1)
 
-    # KANAŁ 2 (Nasłuchiwanie zdjęć i aktualizacja na kanale dedykowanym)
     elif message.channel.id == KANAL_2_ID and message.attachments:
         dodano_foto = False
         for zalacznik in message.attachments:
