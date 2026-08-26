@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
 import os
-import json
 import asyncio
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
@@ -10,56 +9,30 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 KANAL_1_ID = 1530941134816153660
 KANAL_2_ID = 1541126147830448168 
 
-# 📺 ID SPECJALNEGO KANAŁU, NA KTÓRYM BOT MA POKAZYWAĆ TABELE:
+# 📺 SPECJALNY KANAŁ, NA KTÓRYM BOT MA POKAZYWAĆ TABELE:
 KANAL_RANKINGU_ID = 1541150631623000144
 
-PLIK_BAZY = "rankingi.json"
-
-# Przepisane przez Ciebie aktualne punkty graczy
-STARE_PUNKTY_KANAL_1 = {
-    "576481432340267023": 19,
-    "393812412752461824": 19,
-    "401956994950627338": 2
+# Przeorganizowane punkty graczy (przechowywane bezpiecznie jako int dla discord.py)
+ranking_kanal_1 = {
+    576481432340267023: 19,
+    393812412752461824: 19,
+    401956994950627338: 2
 }
 
-STARE_PUNKTY_KANAL_2 = {
-    "576481432340267023": 24,
-    "393812412752461824": 8
+ranking_kanal_2 = {
+    576481432340267023: 24,
+    393812412752461824: 8
 }
 
+# Słownik przechowujący ID wiadomości z tabelami
 ranking_messages = {
     1: None,
     2: None
 }
 
-def zaladuj_dane():
-    """Wczytuje rankingi z pliku JSON lub importuje stare punkty przy pierwszym starcie"""
-    if os.path.exists(PLIK_BAZY):
-        with open(PLIK_BAZY, "r", encoding="utf-8") as f:
-            dane = json.load(f)
-            r1 = {int(k): v for k, v in dane.get("kanal_1", {}).items()}
-            r2 = {int(k): v for k, v in dane.get("kanal_2", {}).items()}
-            return r1, r2
-    else:
-        r1 = {int(k): v for k, v in STARE_PUNKTY_KANAL_1.items()}
-        r2 = {int(k): v for k, v in STARE_PUNKTY_KANAL_2.items()}
-        zapisz_dane(r1, r2)
-        return r1, r2
-
-def zapisz_dane(r1, r2):
-    """Zapisuje aktualny stan punktów do pliku JSON"""
-    dane = {
-        "kanal_1": {str(k): v for k, v in r1.items()},
-        "kanal_2": {str(k): v for k, v in r2.items()}
-    }
-    with open(PLIK_BAZY, "w", encoding="utf-8") as f:
-        json.dump(dane, f, indent=4, ensure_ascii=False)
-
-ranking_kanal_1, ranking_kanal_2 = zaladuj_dane()
-
 def generuj_ranking_embed(ranking_dict, numer_kanalu):
     """Tworzy estetyczną ramkę (Embed) z posortowanymi wynikami"""
-    # Poprawione sortowanie po wartości (punktach), a nie po kluczu
+    # Poprawione sortowanie po wartości (liczbie punktów)
     posortowany = sorted(ranking_dict.items(), key=lambda item: item[1], reverse=True)
     
     embed = discord.Embed(
@@ -90,6 +63,7 @@ async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
 
     embed = generuj_ranking_embed(ranking_dict, numer_kanalu)
 
+    # 1. Próba edycji na podstawie pamięci podręcznej bota
     if ranking_messages[numer_kanalu]:
         try:
             msg = await kanal.fetch_message(ranking_messages[numer_kanalu])
@@ -98,7 +72,7 @@ async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
         except discord.NotFound:
             ranking_messages[numer_kanalu] = None
 
-    # NAPRAWIONO: message.embeds[0].title zamiast message.embeds.title
+    # 2. Próba znalezienia starej wiadomości bota w historii kanału
     try:
         async for message in kanal.history(limit=50):
             if message.author == bot.user and message.embeds:
@@ -109,6 +83,7 @@ async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
     except Exception as e:
         print(f"⚠️ Nie udało się przeszukać historii kanału: {e}")
 
+    # 3. Jeśli nie znaleziono żadnej wiadomości bota, wyślij nową
     nowa_wiadomosc = await kanal.send(embed=embed)
     ranking_messages[numer_kanalu] = nowa_wiadomosc.id
 
@@ -127,6 +102,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
+    # KANAŁ 1
     if message.channel.id == KANAL_1_ID and message.attachments:
         dodano_foto = False
         for zalacznik in message.attachments:
@@ -135,9 +111,9 @@ async def on_message(message):
                 dodano_foto = True
         
         if dodano_foto:
-            zapisz_dane(ranking_kanal_1, ranking_kanal_2)
             await aktualizuj_ranking_na_kanale(ranking_kanal_1, 1)
 
+    # KANAŁ 2
     elif message.channel.id == KANAL_2_ID and message.attachments:
         dodano_foto = False
         for zalacznik in message.attachments:
@@ -146,7 +122,6 @@ async def on_message(message):
                 dodano_foto = True
                 
         if dodano_foto:
-            zapisz_dane(ranking_kanal_1, ranking_kanal_2)
             await aktualizuj_ranking_na_kanale(ranking_kanal_2, 2)
 
     await bot.process_commands(message)
@@ -155,7 +130,6 @@ async def on_message(message):
 @commands.has_permissions(administrator=True)
 async def reset1(ctx):
     ranking_kanal_1.clear()
-    zapisz_dane(ranking_kanal_1, ranking_kanal_2)
     await aktualizuj_ranking_na_kanale(ranking_kanal_1, 1)
     await ctx.send("🗑️ **Ranking 1 na kanale dedykowanym został wyzerowany!**", delete_after=5)
 
@@ -163,7 +137,6 @@ async def reset1(ctx):
 @commands.has_permissions(administrator=True)
 async def reset2(ctx):
     ranking_kanal_2.clear()
-    zapisz_dane(ranking_kanal_1, ranking_kanal_2)
     await aktualizuj_ranking_na_kanale(ranking_kanal_2, 2)
     await ctx.send("🗑️ **Ranking 2 na kanale dedykowanym został wyzerowany!**", delete_after=5)
 
