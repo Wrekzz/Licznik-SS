@@ -12,7 +12,7 @@ KANAL_2_ID = 1541126147830448168
 # 📺 SPECJALNY KANAŁ, NA KTÓRYM BOT MA POKAZYWAĆ TABELE:
 KANAL_RANKINGU_ID = 1541150631623000144
 
-# Przeorganizowane punkty graczy (przechowywane bezpiecznie jako int dla discord.py)
+# Punkty graczy jako klucze int (ID użytkowników w discord.py)
 ranking_kanal_1 = {
     576481432340267023: 19,
     393812412752461824: 19,
@@ -32,7 +32,7 @@ ranking_messages = {
 
 def generuj_ranking_embed(ranking_dict, numer_kanalu):
     """Tworzy estetyczną ramkę (Embed) z posortowanymi wynikami"""
-    # Poprawione sortowanie po wartości (liczbie punktów)
+    # NAPRAWIONO: Sortowanie po wartości (punktach), czyli po drugim elemencie (indeks 1)
     posortowany = sorted(ranking_dict.items(), key=lambda item: item[1], reverse=True)
     
     embed = discord.Embed(
@@ -63,7 +63,6 @@ async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
 
     embed = generuj_ranking_embed(ranking_dict, numer_kanalu)
 
-    # 1. Próba edycji na podstawie pamięci podręcznej bota
     if ranking_messages[numer_kanalu]:
         try:
             msg = await kanal.fetch_message(ranking_messages[numer_kanalu])
@@ -72,7 +71,7 @@ async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
         except discord.NotFound:
             ranking_messages[numer_kanalu] = None
 
-    # 2. Próba znalezienia starej wiadomości bota w historii kanału
+    # NAPRAWIONO: Sprawdzanie pierwszego elementu listy embedów (message.embeds[0].title)
     try:
         async for message in kanal.history(limit=50):
             if message.author == bot.user and message.embeds:
@@ -83,7 +82,6 @@ async def aktualizuj_ranking_na_kanale(ranking_dict, numer_kanalu):
     except Exception as e:
         print(f"⚠️ Nie udało się przeszukać historii kanału: {e}")
 
-    # 3. Jeśli nie znaleziono żadnej wiadomości bota, wyślij nową
     nowa_wiadomosc = await kanal.send(embed=embed)
     ranking_messages[numer_kanalu] = nowa_wiadomosc.id
 
