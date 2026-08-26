@@ -12,7 +12,7 @@ KANAL_2_ID = 1541126147830448168
 # 📺 SPECJALNY KANAŁ, NA KTÓRYM BOT MA POKAZYWAĆ TABELE:
 KANAL_RANKINGU_ID = 1541150631623000144
 
-# Punkty graczy (Zapisane jako pary klucz: wartość)
+# Punkty graczy
 ranking_kanal_1 = {
     576481432340267023: 19,
     393812412752461824: 19,
@@ -31,8 +31,7 @@ ranking_messages = {
 }
 
 def generuj_ranking_embed(ranking_dict, numer_kanalu):
-    """Tworzy estetyczną ramkę (Embed) z posortowanymi wynikami"""
-    # Poprawione sortowanie po punktach (wartości w słowniku)
+    """Tworzy estetyczną ramkę (Embed) z posortowanymi wynikami i podium"""
     posortowany = sorted(ranking_dict.items(), key=lambda item: item[1], reverse=True)
     
     embed = discord.Embed(
@@ -45,7 +44,17 @@ def generuj_ranking_embed(ranking_dict, numer_kanalu):
         opis = "*Brak zrzutów ekranu na tym kanale.*"
     else:
         for poz, (gracz_id, pkty) in enumerate(posortowany, start=1):
-            opis += f"**{poz}.** <@{gracz_id}> — `{pkty}` SS\n"
+            # Dynamiczne przypisywanie ikon dla podium lub zwykłego numeru
+            if poz == 1:
+                prefix = "🥇"
+            elif poz == 2:
+                prefix = "🥈"
+            elif poz == 3:
+                prefix = "🥉"
+            else:
+                prefix = f"**{poz}.**"
+                
+            opis += f"{prefix} <@{gracz_id}> — `{pkty}` SS\n"
             
     embed.description = opis
     embed.set_footer(text="Aktualizowane automatycznie w czasie rzeczywistym")
@@ -64,35 +73,27 @@ async def aktualizuj_ranking_na_kanale(numer_kanalu):
     dane_rankingu = ranking_kanal_1 if numer_kanalu == 1 else ranking_kanal_2
     embed = generuj_ranking_embed(dane_rankingu, numer_kanalu)
 
-    # 1. Próba edycji na podstawie pamięci podręcznej bota
     if ranking_messages[numer_kanalu]:
         try:
             msg = await kanal.fetch_message(ranking_messages[numer_kanalu])
             await msg.edit(embed=embed)
-            print(f"✅ Zaktualizowano tabelę kanału {numer_kanalu} (Edycja).")
             return
         except discord.NotFound:
             ranking_messages[numer_kanalu] = None
 
-    # 2. Szukanie istniejącej wiadomości w historii, aby zapobiec spamowi
     try:
         async for message in kanal.history(limit=50):
             if message.author == bot.user and message.embeds:
                 if message.embeds[0].title == f"🏆 RANKING SS - KANAŁ {numer_kanalu}":
                     ranking_messages[numer_kanalu] = message.id
                     await message.edit(embed=embed)
-                    print(f"✅ Znaleziono i zaktualizowano istniejącą tabelę dla kanału {numer_kanalu}.")
                     return
     except Exception as e:
         print(f"⚠️ Problem podczas sprawdzania historii kanału: {e}")
 
-    # 3. Jeśli nie ma starej wiadomości bota, wyślij nową
     try:
         nowa_wiadomosc = await kanal.send(embed=embed)
         ranking_messages[numer_kanalu] = nowa_wiadomosc.id
-        print(f"✅ Wysłano nową tabelę dla kanału {numer_kanalu}!")
-    except discord.Forbidden:
-        print(f"❌ [BŁĄD] Brak uprawnień do wysyłania Embedów na kanale {KANAL_RANKINGU_ID}!")
     except Exception as e:
         print(f"❌ [BŁĄD] Nie udało się wysłać wiadomości: {e}")
 
@@ -111,7 +112,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # KANAŁ 1
+    # KANAŁ 1 - Dodawanie punktu
     if message.channel.id == KANAL_1_ID and message.attachments:
         dodano_foto = False
         for zalacznik in message.attachments:
@@ -121,7 +122,7 @@ async def on_message(message):
         if dodano_foto:
             await aktualizuj_ranking_na_kanale(1)
 
-    # KANAŁ 2
+    # KANAŁ 2 - Dodawanie punktu
     elif message.channel.id == KANAL_2_ID and message.attachments:
         dodano_foto = False
         for zalacznik in message.attachments:
@@ -132,6 +133,44 @@ async def on_message(message):
             await aktualizuj_ranking_na_kanale(2)
 
     await bot.process_commands(message)
+
+@bot.event
+async def on_message_delete(message):
+    """Zdarzenie wykrywające usunięcie wiadomości na kanałach i odejmujące punkt"""
+    if message.author.bot:
+        return
+
+    # Sprawdzenie usunięcia na KANALE 1
+    if message.channel.id == KANAL_1_ID and message.attachments:
+        odliczono_foto = False
+        for zalacznik in message.attachments:
+            if zalacznik.content_type and zalacznik.content_type.startswith("image/"):
+                # Odejmij punkt tylko jeśli użytkownik jakieś ma
+                if message.author.id in ranking_kanal_1 and ranking_kanal_1[message.author.id] > 0:
+                    ranking_kanal_1[message.author.id] -= 1
+                    odliczono_foto = True
+                    
+                    # Jeśli spadnie do 0, usuń go ze słownika, żeby nie zaśmiecał tabeli
+                    if ranking_kanal_1[message.author.id] == 0:
+                        del ranking_kanal_1[message.author.id]
+                        
+        if odliczono_foto:
+            await aktualizuj_ranking_na_kanale(1)
+
+    # Sprawdzenie usunięcia na KANALE 2
+    elif message.channel.id == KANAL_2_ID and message.attachments:
+        odliczono_foto = False
+        for zalacznik in message.attachments:
+            if zalacznik.content_type and zalacznik.content_type.startswith("image/"):
+                if message.author.id in ranking_kanal_2 and ranking_kanal_2[message.author.id] > 0:
+                    ranking_kanal_2[message.author.id] -= 1
+                    odliczono_foto = True
+                    
+                    if ranking_kanal_2[message.author.id] == 0:
+                        del ranking_kanal_2[message.author.id]
+                        
+        if odliczono_foto:
+            await aktualizuj_ranking_na_kanale(2)
 
 @bot.command()
 @commands.has_permissions(administrator=True)
